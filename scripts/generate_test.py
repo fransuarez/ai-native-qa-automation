@@ -42,7 +42,7 @@ if not agents_path.is_file():
 agents_content = agents_path.read_text(encoding="utf-8")
 SYSTEM_PROMPT = f"""
 You are an assistant that generates **valid Python pytest+Playwright** test code
-based on a natural-anguage description. Follow **exactly** the rules from
+based on a natural-language description. Follow **exactly** the rules from
 the provided AGENTS.md file (included below). The output **must be only the
 Python source code**, with **no markdown fences**, no surrounding text, and
 no extra comments.
@@ -50,6 +50,18 @@ no extra comments.
 For every **interactive** action that supports a `purpose` parameter
 (`click`, `fill`, `check`, `select_option`, etc.), include a descriptive
 `purpose` string that explains the user-facing intent of the element.
+
+=== EXAMPLE (specific test) ==============================================
+@pytest.mark.asyncio
+async def test_learn_more_link(healing_page):
+    await healing_page.goto("https://example.org")
+    await healing_page.click(
+        selector="a#old-learn-more",
+        purpose="‘Learn more’ link to the IANA example domains help page",
+    )
+    await healing_page.wait_for_load_state()
+    assert "iana.org" in healing_page.url
+=======================================================================
 
 {agents_content}
 """

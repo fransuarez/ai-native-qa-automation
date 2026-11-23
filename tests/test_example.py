@@ -7,7 +7,7 @@ async def test_example_domain(healing_page):
 
     # 2️⃣ Click a deliberately wrong selector – this will trigger healing
     await healing_page.click(
-        selector="button#old-submit-id",
+        selector="a[href*='example-domains']",
         purpose="link to learn more about Example Domain"
     )
 

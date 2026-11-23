@@ -35,13 +35,22 @@ playwright install chromium
 Do NOT install packages individually with `pip install <package>`; always update `requirements.txt` and re-run `pip install -r requirements.txt`.
 
 ## Rules
-- All tests use the `healing_page` fixture (NOT `page`). It is auto-available after `pip install pytest-self-healer`.
-- Every click/fill/action MUST include a `purpose` string describing the element's intent, e.g.:
-  `await healing_page.click(selector="button#old-id", purpose="checkout submit button in cart summary")`
-- `GROQ_API_KEY` is stored in `.env` and loaded via `python-dotenv`. Never hardcode it.
-- Generated tests must be valid Python (no markdown fences) and must include `purpose` in every action.
-- `.env` is gitignored and must never be committed.
-- By default use the default URL **https://example.org/** as the starting page when needed.
+- All tests use the `healing_page` fixture (NOT the default `page` fixture).
+- Every interactive action that supports a `purpose` argument (`click`, `fill`,
+  `check`, `select_option`, …) **must** include a descriptive `purpose` string.
+- `goto()` does **not** accept `purpose`.
+- The default start‑page is **https://example.org/**; use it unless the
+  description says otherwise.
+- Generated test files must contain **only raw Python code** – no markdown
+  fences, no extra comments, no surrounding text.
+- Tests must be asynchronous:
+  ```python
+  @pytest.mark.asyncio
+  async def test_…(healing_page):
+      …
+  ```
+- Use selectors that actually exist on https://example.org/ (e.g. the link
+  with text “Learn more”; there is no `<h1>` on that page).
 
 ## Commands
 - Install dependencies: `pip install -r requirements.txt && playwright install chromium`
