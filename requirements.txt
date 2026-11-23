@@ -1,0 +1,6 @@
+pytest
+pytest-playwright
+playwright
+pytest-self-healer
+groq
+python-dotenv
