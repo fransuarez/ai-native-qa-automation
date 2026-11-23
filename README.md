@@ -1,40 +1,104 @@
-*AI-powered E2E test generation and self-healing prototype using Python, Playwright, and LLMs*
+# AI‑Powered E2E Test Generation & Self‑Healing Prototype  
 
-For a QA portfolio project like yours, the README isn't just documentation—it's your **interview pitch in written form**. A good QA portfolio README should quickly show what you built, how to run it, and, crucially, demonstrate **engineering judgment** through honest trade-offs .
+[![CI](https://github.com/fransuarez/ai-qa-prototype/actions/workflows/qa-ai-pipeline.yml/badge.svg)](https://github.com/fransuarez/ai-qa-prototype/actions/workflows/qa-ai-pipeline.yml)
 
+*AI‑powered E2E test generation and self‑healing prototype using Python, Playwright, and LLMs.*
 
-### 📄 Recommended README Structure
+---
 
-**1. Header & One-Line Pitch**
-Start with the project name and a single, clear sentence. Use the repository description we agreed on (e.g., *"AI-powered E2E test generation and self-healing prototype using Python, Playwright, and LLMs"*). Add badges if you have a green CI run—this immediately signals the project works .
+## 📦 Quickstart – The Two‑Command Rule  
 
-**2. Quickstart (The "Two-Command" Rule)**
-Make it dead simple for a screener to see it work. Provide **copy-pasteable commands** with no ambiguity .
-*   **Install:** `pip install -r requirements.txt && playwright install chromium`
-*   **Run (Example):** `python scripts/generate_test.py "test that example.com loads"` followed by `pytest tests/test_generated.py -v --llm-provider=ollama --ollama-model=qwen2.5-coder:3b`
+```bash
+# Install dependencies and browsers
+pip install -r requirements.txt && playwright install chromium
 
-**3. Architecture & "Why"**
-Briefly explain the two-brain setup. Don't just list tools—explain the decision.
-*   **Generation:** Why Groq (`gpt-oss-120b`)? (Fast, free tier, good at code).
-*   **Healing:** Why Ollama (`qwen2.5-coder:3b`) locally? (Zero cost for high-frequency repair loops, no API latency during test execution).
-*   **The Loop:** A simple sentence or a tiny Mermaid diagram: *"Groq writes the test → Playwright runs it → If a selector fails, pytest-self-healer asks Ollama to find the element using the `purpose` string → Test passes."*
+# Generate a test from natural language
+python scripts/generate_test.py "test that example.org loads and the Learn more link works"
 
-**4. The "Trade-offs" Section (Critical for QA Roles)**
-This is the most important part for a QA portfolio. It proves you think like an engineer, not just a tool operator .
-*   **What it does well:** Handles selector-based flakiness automatically; generates tests from natural language.
-*   **Known Limitations (Be honest):**
-    *   *Scope:* Self-healing currently only handles `selector-not-found` errors, not complex logic changes.
-    *   *Model Dependency:* Relies on local Ollama performance; a larger local model would be needed for complex page structures.
-    *   *AI Review:* Note that *you* review the generated tests before committing them to the repo (this shows you don't blindly trust AI) .
+# Run the generated test (with self‑healing enabled)
+pytest tests/test_generated.py -v --llm-provider=ollama --ollama-model=qwen2.5-coder:3b
+```
 
-**5. Requirements & Environment**
-List the exact prerequisites so a reviewer knows if they can run it .
-*   Python 3.11+, Ollama (with `qwen2.5-coder:3b` pulled), Groq API Key (environment variable).
-*   *Note:* Mention that the `GROQ_API_KEY` must be set in the environment (do not commit it).
+> **Tip:** The `healing_page` fixture (provided by `pytest-self-healer`) is used automatically; no extra setup is needed.
 
-**6. CI/CD Evidence**
-Include a link or a badge to your **GitHub Actions** workflow. If the pipeline is green, show it. If it requires secrets to run (which it does), explain that the workflow is configured to use `GROQ_API_KEY` via GitHub Secrets .
+---
 
-### 💡 A Final Tip for Your Interview
+## 🏗️ Architecture & “Why”
 
-When they ask about this project, point them directly to the **Trade-offs** section. Say: *"I documented the limitations in the README because I wanted to show that I understand where the prototype ends and production hardening begins. For example, I know the healing is limited to selector errors, and the next step would be adding visual diffing or API contract checks."* This turns a "toy project" into a demonstration of **maturity and planning**.
+| Component | Why we chose it |
+|-----------|-----------------|
+| **Groq (`gpt‑oss‑120b`)** | Fast, free‑tier model that produces high‑quality code from natural language. |
+| **Ollama (`qwen2.5‑coder:3b`)** | Runs locally, eliminating API latency and cost during test execution; ideal for rapid selector repair loops. |
+| **Playwright** | Modern, reliable browser automation with built‑in async support. |
+| **pytest‑self‑healer** | Detects `selector‑not‑found` failures and rewrites selectors based on a human‑readable `purpose` string. |
+
+**The Loop**  
+
+```
+Natural‑language description → Groq generates test → Playwright runs test → 
+selector failure? → pytest‑self‑healer asks Ollama to locate element using the purpose string → test passes
+```
+
+---
+
+## ⚖️ Trade‑offs (Engineering Judgment)
+
+- **What it does well**  
+  - Automatic healing of flaky selectors.  
+  - One‑line generation of end‑to‑end tests from plain English.  
+
+- **Known limitations**  
+  - Healing only covers *selector‑not‑found* errors; logic changes, timing issues, or API contract shifts are still manual.  
+  - Local model (`qwen2.5‑coder:3b`) is small; complex page structures may require a larger model for accurate repairs.  
+  - Generated tests are **not** production‑ready out‑of‑the‑box – a human review step is essential before committing them.  
+
+- **Future improvements**  
+  - Add visual‑diff based healing for layout changes.  
+  - Integrate contract testing (e.g., Pact) to catch backend API changes.  
+  - Plug in a larger local model or a hosted LLM for richer reasoning.
+
+---
+
+## 🛠️ Requirements & Environment
+
+| Requirement | Details |
+|-------------|---------|
+| **Python** | 3.11+ |
+| **Ollama** | Installed and running; pull the model with `ollama pull qwen2.5-coder:3b`. |
+| **Groq API Key** | Set as environment variable `GROQ_API_KEY` (never commit). |
+| **Playwright browsers** | `playwright install chromium` (run after `pip install`). |
+
+```bash
+# Example of setting the Groq key on Unix/macOS
+export GROQ_API_KEY=your_groq_key_here
+```
+
+---
+
+## 🚀 CI/CD Evidence
+
+The repository includes a GitHub Actions workflow (`.github/workflows/qa-ai-pipeline.yml`) that:
+
+1. Installs Python & dependencies.  
+2. Installs Ollama, pulls `qwen2.5-coder:3b`, and starts the Ollama daemon.  
+3. Runs the full test suite with self‑healing enabled.  
+
+A passing badge is displayed at the top of this README.
+
+---
+
+## 📂 Project Layout
+
+```
+.
+├── .github/
+│   └── workflows/qa-ai-pipeline.yml   # CI pipeline
+├── scripts/
+│   └── generate_test.py                # Groq test generation script
+├── tests/
+│   ├── test_example.py                 # Demo test with intentional broken selector
+│   ├── test_generated.py               # Populated by generate_test.py
+│   └── test_regression.py              # Optional regression check
+├── requirements.txt                    # All Python dependencies
+├── .env                                # (git‑ignored) GROQ_API_KEY
+└── README.md                           # ← you are here

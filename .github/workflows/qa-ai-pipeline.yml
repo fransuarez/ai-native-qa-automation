@@ -2,9 +2,7 @@ name: AI-QA Pipeline
 
 on:
   push:
-    branches: [ main, develop ]
-  pull_request:
-    branches: [ main, develop ]
+    branches: [ main ]
 
 jobs:
   test-and-heal:
@@ -58,13 +56,21 @@ jobs:
         run: |
           ollama pull qwen2.5-coder:3b
 
+      # --------------------------------------------------------------
+      # 2️⃣ **Generate a test from a description** – runs before the test suite
+      # --------------------------------------------------------------
+      - name: Generate test from description
+        run: |
+            python scripts/generate_test.py "test that the page has a heading containing 'Example'"
+
       # -------------------------------------------------
       # 4️⃣ Run pytest with self-healing enabled
       # -------------------------------------------------
       - name: Run tests (with healing)
         id: test
+        continue-on-error: true               # <-- allow failures for healing
         run: |
-          pytest -v
+          pytest tests/
         # The default pytest.ini already injects the required --llm-provider flags
 
       # -------------------------------------------------
@@ -73,9 +79,17 @@ jobs:
       - name: Apply healed selectors
         id: apply
         run: |
-          python scripts/apply_healed_selectors.py
+          python scripts/apply_healed_selectors.py --test tests/test_generated.py
         # The script returns exit-code 0 even if nothing changed;
         # we capture the number of modified files for the next step.
+
+      # -------------------------------------------------
+      # 6️⃣ Run pytest again (should be green after healing)
+      # -------------------------------------------------
+      - name: Run tests (second run - expect success)
+        id: test_second
+        run: |
+          pytest tests/
 
       # -------------------------------------------------
       # 6️⃣ Commit healed files (if any)

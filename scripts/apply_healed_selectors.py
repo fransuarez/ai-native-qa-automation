@@ -1,11 +1,10 @@
 import json
+import argparse  
 from pathlib import Path
+from datetime import datetime
 
 CACHE_FILE = Path("reports/selector_cache.json")
 TESTS_DIR = Path("tests")  # Adjust if your tests or Page Objects live elsewhere
-
-from datetime import datetime
-import glob
 
 # ----------------------------------------------------------------------
 # Helper: locate the latest healing report produced by pytest‑self‑healer
@@ -60,6 +59,20 @@ def extract_from_report(report: dict) -> dict[str, str]:
 
 
 def apply_fixes() -> None:
+    # --------------------------------------------------------------
+    # 0️⃣ Parse optional single‑test argument
+    # --------------------------------------------------------------
+    parser = argparse.ArgumentParser(
+        description="Apply healed selectors to test files."
+    )
+    parser.add_argument(
+        "--test",
+        type=Path,
+        help="Path to a single test file to patch (default: all *.py under tests/)",
+    )
+    args = parser.parse_args()
+    single_test_path: Path | None = args.test
+
     # 1️⃣ Try the explicit cache file first (kept for backward compat)
     cache_path = CACHE_FILE if CACHE_FILE.exists() else None
 
@@ -74,10 +87,8 @@ def apply_fixes() -> None:
 
     # The report may be a list (multiple runs) or a single dict.
     if isinstance(data, list):
-        # Merge mappings from all entries.
         mappings = {}
         for entry in data:
-            # Try both formats – nested dict OR standard report dict.
             mappings.update(extract_mappings(entry) or extract_from_report(entry))
     else:
         mappings = extract_mappings(data) or extract_from_report(data)
@@ -87,10 +98,16 @@ def apply_fixes() -> None:
         return
 
     # ------------------------------------------------------------------
-    # Replacement loop – unchanged from original script
+    # Replacement loop – now respects optional single‑test target
     # ------------------------------------------------------------------
     updated_files = 0
-    for py_file in TESTS_DIR.rglob("*.py"):
+    # If a specific test file was provided, limit the search to that file.
+    files_to_process = (
+        [single_test_path] if single_test_path else TESTS_DIR.rglob("*.py")
+    )
+    for py_file in files_to_process:
+        if not py_file.is_file():
+            continue
         content = py_file.read_text(encoding="utf-8")
         new_content = content
 
@@ -107,7 +124,6 @@ def apply_fixes() -> None:
             print(f"✅ Updated selectors in: {py_file}")
 
     print(f"🛠️  Done. Modified {updated_files} file(s).")
-
-
+    
 if __name__ == "__main__":
     apply_fixes()
