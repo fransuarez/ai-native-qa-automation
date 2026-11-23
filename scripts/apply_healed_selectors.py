@@ -49,12 +49,17 @@ def extract_from_report(report: dict) -> dict[str, str]:
     replacement loop.
     """
     mappings = {}
-    healed = report.get("healed_selectors", [])
-    for entry in healed:
-        old_sel = entry.get("old_selector")
-        new_sel = entry.get("new_selector")
-        if old_sel and new_sel and old_sel != new_sel:
-            mappings[old_sel] = new_sel
+    # Real format of pytest-self-healer
+    for a in report.get("attempts", []):
+        if a.get("success"):
+            old, new = a.get("original_selector"), a.get("suggested_selector")
+            if old and new and old != new:
+                mappings[old] = new
+    # Old format
+    for e in report.get("healed_selectors", []):
+        old, new = e.get("old_selector"), e.get("new_selector")
+        if old and new and old != new:
+            mappings[old] = new
     return mappings
 
 

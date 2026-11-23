@@ -10,21 +10,16 @@ jobs:
     permissions:
       contents: write   # needed to push healed changes back
     env:
-      # If you use Groq anywhere else (e.g. generate_test.py) make sure the secret exists
       GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
 
     steps:
-      # -------------------------------------------------
-      # 1️⃣ Checkout code
-      # -------------------------------------------------
+      # 1. Checkout
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
-      # -------------------------------------------------
-      # 2️⃣ Set up Python + cache deps
-      # -------------------------------------------------
+      # 2. Python + pip cache
       - name: Set up Python 3.11
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: "3.11"
           cache: "pip"
@@ -33,71 +28,76 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
-          playwright install chromium
+          playwright install --with-deps chromium
 
-      # -------------------------------------------------
-      # 3️⃣ Install & start Ollama (local LLM)
-      # -------------------------------------------------
+      # 3. Ollama (local LLM)
       - name: Install Ollama
-        run: |
-          curl -L https://ollama.com/install.sh | sudo bash
+        run: curl -fsSL https://ollama.com/install.sh | sudo bash
 
-      - name: Start Ollama daemon
-        # Run Ollama as a background service for the whole job
+      - name: Wait for Ollama API
         run: |
           sudo systemctl start ollama
-          # Wait until the socket is ready
-          for i in {1..10}; do
-            if ollama list | grep -q qwen2.5-coder; then break; fi
+          # Wait for the HTTP API (not for the model, which isn't pulled yet)
+          for i in $(seq 1 30); do
+            if curl -sf http://127.0.0.1:11434/api/tags > /dev/null; then
+              echo "Ollama is ready"; exit 0
+            fi
             sleep 2
           done
+          echo "Ollama did not become ready"; exit 1
 
       - name: Pull required model
-        run: |
-          ollama pull qwen2.5-coder:3b
+        run: ollama pull qwen2.5-coder:3b
 
-      # --------------------------------------------------------------
-      # 2️⃣ **Generate a test from a description** – runs before the test suite
-      # --------------------------------------------------------------
+      # 4. Generate test from a description
       - name: Generate test from description
         run: |
-            python scripts/generate_test.py "test that the page has a heading containing 'Example'"
+          python scripts/generate_test.py "test that the page has a heading containing 'Example'"
 
-      # -------------------------------------------------
-      # 4️⃣ Run pytest with self-healing enabled
-      # -------------------------------------------------
+      # ------------------------------------------------------------------
+      # 4b. TEMPORARY DEBUG: the test is regenerated on every run, so we
+      #     inject the prints here instead of editing test_generated.py.
+      #     Remove this step (and the "Show generated test" one) when done.
+      # ------------------------------------------------------------------
+      - name: "[DEBUG] Inject page diagnostics into generated test"
+        run: |
+          # Insert two lines right after the goto(...) call (4-space indent
+          # because they live inside the async def).
+          sed -i '/healing_page\.goto(/a\    print("DEBUG URL:", healing_page.url)\n    print("DEBUG HTML:", (await healing_page.content())[:500])' tests/test_generated.py
+          echo "----- tests/test_generated.py -----"
+          cat tests/test_generated.py
+
+      # 5. First pytest run (healing enabled). Failures allowed.
       - name: Run tests (with healing)
         id: test
-        continue-on-error: true               # <-- allow failures for healing
-        run: |
-          pytest tests/
-        # The default pytest.ini already injects the required --llm-provider flags
+        continue-on-error: true
+        run: pytest tests/ -s
 
-      # -------------------------------------------------
-      # 5️⃣ Apply healed selectors back to source files
-      # -------------------------------------------------
+      - name: Show healing reports (debug)
+        if: always()
+        run: |
+          ls -R reports || true
+          for f in reports/*.json; do
+            echo "=== $f"; cat "$f"; echo
+          done
+
+      # 6. Apply healed selectors back to the source files
       - name: Apply healed selectors
         id: apply
-        run: |
-          python scripts/apply_healed_selectors.py --test tests/test_generated.py
-        # The script returns exit-code 0 even if nothing changed;
-        # we capture the number of modified files for the next step.
+        run: python scripts/apply_healed_selectors.py --test tests/test_generated.py
 
-      # -------------------------------------------------
-      # 6️⃣ Run pytest again (should be green after healing)
-      # -------------------------------------------------
+      # 7. Second run (expect green after healing)
       - name: Run tests (second run - expect success)
         id: test_second
-        run: |
-          pytest tests/
+        run: pytest tests/ -s
 
-      # -------------------------------------------------
-      # 6️⃣ Commit healed files (if any)
-      # -------------------------------------------------
+      # 8. Commit healed files (also detects untracked files)
       - name: Check for modified files
         id: gitdiff
         run: |
-          git diff --quiet || echo "changed=true" >> $GITHUB_OUTPUT
+          if [ -n "$(git status --porcelain tests/)" ]; then
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Commit and push healed selectors
         if: steps.gitdiff.outputs.changed == 'true'
@@ -107,17 +107,18 @@ jobs:
         run: |
           git config user.name "$GIT_AUTHOR_NAME"
           git config user.email "$GIT_AUTHOR_EMAIL"
-          git add .
+          git add tests/
           git commit -m "🤖 Apply healed selectors from CI run"
           git push
 
-      # -------------------------------------------------
-      # 7️⃣ Upload healing reports (optional, for debugging)
-      # -------------------------------------------------
+      # 9. Upload reports + screenshots + the generated test
       - name: Upload healing reports
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: healing-reports
-          path: reports/*.json
+          path: |
+            reports/**
+            tests/test_generated.py
           retention-days: 7
+          if-no-files-found: warn
